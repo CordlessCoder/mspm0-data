@@ -998,7 +998,7 @@ pub struct Adc {
     ///
     /// Empty when the family's datasheet has no such table, which none so far lacks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub internal_channels: BTreeMap<u8, AdcInternalSource>,
+    pub internal_channels: BTreeMap<u8, AdcInternalChannel>,
 
     /// Guaranteed ceiling on the time the ADC needs to wake from automatic power down, in
     /// nanoseconds, from the datasheet's `Twakeup` MAX column.
@@ -1083,6 +1083,38 @@ pub struct Adc {
     /// exists.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pga_sample_ns: BTreeMap<u8, u32>,
+}
+
+/// One ADC channel's route to an internal signal, and what that route costs to sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdcInternalChannel {
+    /// The signal this channel samples.
+    pub source: AdcInternalSource,
+
+    /// The shortest sample window this route supports, in nanoseconds, from the datasheet's
+    /// `tSample_<signal>` row, MIN column.
+    ///
+    /// These are far above [`Adc::sample_min_ns`], which bounds a package pin: 10000 for the
+    /// internal reference against a 156ns pin on mspm0l211x. A window sized for the pin samples an
+    /// internal signal which has not settled, and nothing reports it.
+    ///
+    /// The datasheets state one row per signal per family, so every channel routing a given signal
+    /// on a given device carries the same figure — a dual-ADC part reaching one signal from both
+    /// gets it on both routes. It is stored per channel because that is where a consumer looks.
+    ///
+    /// **The condition differs per signal and is load-bearing.** The internal reference is measured
+    /// with VDD as the ADC reference, because it cannot be measured against itself: sampling that
+    /// channel with `VRSEL` on the internal reference is outside the published figure entirely. The
+    /// supply and USB monitors are the other way round, measured against the internal reference.
+    ///
+    /// **`None` on the temperature-sensor route means "look elsewhere", not "unpublished".** That
+    /// signal states two figures rather than one — [`TemperatureSensor::settling_ns`] and
+    /// [`TemperatureSensor::calibration_sample_ns`], which differ on the older L datasheets and are
+    /// independently absent — so no single number here could carry it. Everywhere else `None` is
+    /// the ordinary meaning: the datasheet publishes no row for that signal. The OPA outputs are
+    /// also `None` here; their window is per PGA gain, in [`Adc::pga_sample_ns`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_min_ns: Option<u32>,
 }
 
 /// An internal signal an ADC channel samples instead of a package pin.

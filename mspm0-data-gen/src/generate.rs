@@ -8,15 +8,16 @@ use std::{
 
 use anyhow::{anyhow, bail, ensure, Context};
 use mspm0_data_types::{
-    Adc, Chip, Comp, Dma, DmaChannel, Flashctl, Interrupt, IoStructure, Memory, MemoryKind,
-    Package, PackagePin, Peripheral, PeripheralInterrupt, PeripheralPin, PeripheralType,
-    PowerDomain, PowerMode, Sysctl, Timer, Uart, Unicomm, Vref,
+    Adc, AdcInternalChannel, AdcInternalSource, Chip, Comp, Dma, DmaChannel, Flashctl, Interrupt,
+    IoStructure, Memory, MemoryKind, Package, PackagePin, Peripheral, PeripheralInterrupt,
+    PeripheralPin, PeripheralType, PowerDomain, PowerMode, Sysctl, Timer, Uart, Unicomm, Vref,
 };
 use regex::Regex;
 
 use crate::comp::CompTiming;
 use crate::{
     adc_channels::AdcChannels,
+    adc_internal_sample::AdcInternalSample,
     adc_sample::AdcSample,
     adc_wakeup::AdcWakeup,
     header::Header,
@@ -51,6 +52,7 @@ fn generate_family(family: &PartFamily, sources: &FamilySources) -> anyhow::Resu
         header,
         sysconfig,
         adc_channels,
+        adc_internal_sample,
         adc_sample,
         adc_wakeup,
         svd,
@@ -91,6 +93,7 @@ fn generate_family(family: &PartFamily, sources: &FamilySources) -> anyhow::Resu
         family,
         sysconfig,
         adc_channels,
+        adc_internal_sample,
         adc_sample,
         adc_wakeup,
         &mut peripherals,
@@ -1393,6 +1396,7 @@ fn apply_adc(
     family: &PartFamily,
     sysconfig: &SysconfigFile,
     adc_channels: Option<&AdcChannels>,
+    adc_internal_sample: Option<&AdcInternalSample>,
     adc_sample: Option<&AdcSample>,
     adc_wakeup: Option<AdcWakeup>,
     peripherals: &mut BTreeMap<String, Peripheral>,
@@ -1438,11 +1442,46 @@ fn apply_adc(
             .get(name)
             .context(format!("{chip_name}: {name} has no MEMCTL count"))?;
 
-        // Absent data is a gap verify.rs reports, like the other datasheet extractions.
+        // Absent data is a gap verify.rs reports, like the other datasheet extractions. The
+        // per-signal sample minimums are joined on here: the datasheets state one row per signal,
+        // so every channel routing that signal on this device carries the same figure, which is
+        // what a dual-ADC part reaching one signal from both ADCs needs.
         let internal_channels = adc_channels
             .and_then(|family| family.get(name))
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(channel, source)| {
+                let sample_min_ns = adc_internal_sample
+                    .and_then(|family| family.sample_min_ns.get(&source))
+                    .copied();
+
+                (
+                    channel,
+                    AdcInternalChannel {
+                        source,
+                        sample_min_ns,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        // One page of the datasheet against another: the `tSample_VREF` row states the channel it
+        // was measured on, and it has to be the channel the ADC Channel Mapping table routes VREF
+        // to. It is the only independent check available on a channel map, so a disagreement fails
+        // generation rather than being reported and passed over.
+        if let Some(stated) = adc_internal_sample.and_then(|family| family.vref_channel) {
+            let mapped = internal_channels
+                .iter()
+                .find(|(_, route)| route.source == AdcInternalSource::Vref)
+                .map(|(channel, _)| *channel);
+
+            ensure!(
+                mapped == Some(stated),
+                "{chip_name}: {name}'s tSample_VREF row is measured on channel {stated}, but the \
+                 channel mapping table routes VREF to {mapped:?}"
+            );
+        }
 
         peripheral.adc = Some(Adc {
             memctl,

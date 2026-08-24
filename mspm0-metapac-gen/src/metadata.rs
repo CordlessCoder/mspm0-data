@@ -404,11 +404,6 @@ fn generate_peripheral(
         Some(adc) => {
             let memctl = Literal::u8_unsuffixed(adc.memctl);
             let vrsel = Literal::u8_unsuffixed(adc.vrsel);
-            let internal_channels = adc.internal_channels.iter().map(|(channel, source)| {
-                let channel = Literal::u8_unsuffixed(*channel);
-                let source = adc_internal_source(*source);
-                quote! { AdcInternalChannel { channel: #channel, source: #source } }
-            });
             let ns = |value: Option<u32>| match value {
                 Some(ns) => {
                     let ns = Literal::u32_unsuffixed(ns);
@@ -416,6 +411,18 @@ fn generate_peripheral(
                 }
                 None => quote! { None },
             };
+            let internal_channels = adc.internal_channels.iter().map(|(channel, route)| {
+                let channel = Literal::u8_unsuffixed(*channel);
+                let source = adc_internal_source(route.source);
+                let sample_min_ns = ns(route.sample_min_ns);
+                quote! {
+                    AdcInternalChannel {
+                        channel: #channel,
+                        source: #source,
+                        sample_min_ns: #sample_min_ns,
+                    }
+                }
+            });
             let (wakeup_max_ns, wakeup_typ_ns) = (ns(adc.wakeup_max_ns), ns(adc.wakeup_typ_ns));
             let sample_min_ns = ns(adc.sample_min_ns);
             let pga_sample_ns = adc.pga_sample_ns.iter().map(|(gain, sample_ns)| {

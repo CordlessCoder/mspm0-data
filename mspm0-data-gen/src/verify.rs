@@ -276,8 +276,8 @@ fn adc_internal_sources_exist(chip: &Chip, name: &str) -> anyhow::Result<()> {
             continue;
         };
 
-        for (channel, source) in &adc.internal_channels {
-            let instance = match source {
+        for (channel, route) in &adc.internal_channels {
+            let instance = match route.source {
                 AdcInternalSource::Opa0 => "OPA0",
                 AdcInternalSource::Opa1 => "OPA1",
                 AdcInternalSource::Gpamp => "GPAMP",
