@@ -60,10 +60,26 @@ pub static PERIMAP: RegexMap<&str> = RegexMap::new(&[
     // the TRMs and with each other about CTL0 bits 1 and 2, which the YAML resolves in the TRMs'
     // favour.
     (".*:vref", "v1"),
-    // No RTC entry: a version names a register block, and none has been curated. The variants,
-    // for whoever writes them: sysconfig calls the standalone pre-LFSS peripheral the "legacy"
-    // RTC, and the ones inside the LFSS are RTC_A when the LFSS has an independent VBAT supply
-    // and RTC_B when it is powered from VDD. `mspm0g..0x` has the legacy one, everything else B.
+    // No RTC entry: a version names a register block, and none has been curated. What the split
+    // actually is, settled against hw_rtc.h, hw_lfss.h, SLAU846 SS37.4 and the SVDs:
+    //
+    // The RTC calendar registers are byte-identical everywhere - CLKCTL through RTCLOCK, 1100h to
+    // 11FCh, same names and same offsets in both headers, at the same absolute address since every
+    // instance is based at 0x40094000. The two blocks differ in what surrounds them, not in the
+    // RTC. The legacy peripheral on `mspm0g..0x` has a GPRCM (PWREN/RSTCTL/CLKCFG/STAT), a
+    // publisher port and no subscriber, and its GEN_EVENT group is spaced 4 bytes where every
+    // other MSPM0 interrupt group is spaced 8 - hw_rtc.h and the TRM's register table both say so,
+    // and the SVD is the one that disagrees. The LFSS has no GPRCM at all, has FSUB_0 as well as
+    // FPUB_0, spaces both interrupt groups 8 bytes, and wraps the same RTC group together with
+    // tamper I/O (1200h), a watchdog (1300h) and scratch-pad memory (1400h).
+    //
+    // So `rtc_b` should not exist as a block: on g151x, g351x, g518x, l112x and l211x sysconfig
+    // emits `RTC_B` and `LFSS` as two instances at the same address, and they are one
+    // peripheral. The work is `rtc_legacy` for the four `mspm0g..0x` families and `lfss_v1` for
+    // the nine that have an LFSS, after which the duplicate `RTC_B` instance should go.
+    //
+    // Nor is sysconfig's `RTC_B` node a reliable "has an RTC" signal: c1105_c1106, h321x, l122x
+    // and l222x have an LFSS with no `RTC_B` node, and all four datasheets advertise an RTC.
     (".*:factoryregion", "v1"),
     // SLAU893 describes two C-series SYSCTLs, "SYSCTL_C1103_C1104" and "SYSCTL_C1105_C1106". The
     // latter is a superset: it adds the HFXT and LFXT crystal drivers, `MCLKCFG.FLASHWAIT` and the
