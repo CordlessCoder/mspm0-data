@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::LazyLock};
 
-use anyhow::bail;
+use anyhow::{bail, ensure};
 use mspm0_data_types::{AdcInternalSource, Chip, IoStructure, PeripheralType, PowerDomain};
 use regex::Regex;
 
@@ -12,6 +12,7 @@ pub fn verify(chip: &Chip, name: &str) -> Vec<anyhow::Error> {
         gpio_no_duplicates,
         peripheral_types_known,
         register_blocks_exist,
+        register_blocks_written,
         vref_startup_known,
         adc_channels_known,
         adc_wakeup_known,
@@ -101,6 +102,56 @@ fn register_blocks_exist(chip: &Chip, name: &str) -> anyhow::Result<()> {
             );
         }
     }
+
+    Ok(())
+}
+
+/// A peripheral type with no register block at all, which is not on the list of known gaps.
+///
+/// The other direction of [`register_blocks_exist`]. A peripheral with no `perimap` entry gets no
+/// version and no register block, so it appears in the metadata with an address, pins and
+/// interrupts and cannot be addressed. Nothing said so: DAC0 sat like that on ten chips until the
+/// HAL asked for it. Listing the gaps here makes a new one fail generation rather than join them
+/// quietly.
+///
+/// Adding a type to `UNWRITTEN_BLOCKS` is a decision to ship it unaddressable. Writing the block
+/// and its `perimap` entry is the other option, and is what the list is for.
+fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
+    /// Types with no `data/registers` block yet, each an instance a consumer cannot reach.
+    const UNWRITTEN_BLOCKS: &[PeripheralType] = &[
+        PeripheralType::Aes,
+        PeripheralType::AesAdv,
+        PeripheralType::Debugss,
+        PeripheralType::Event,
+        PeripheralType::GpAmp,
+        PeripheralType::I2s,
+        PeripheralType::Iwdt,
+        PeripheralType::KeystoreCtl,
+        PeripheralType::Lcd,
+        PeripheralType::Lfss,
+        PeripheralType::Npu,
+        PeripheralType::Rtc,
+        PeripheralType::Spgss,
+        PeripheralType::Spi,
+        PeripheralType::Usbfs,
+        PeripheralType::Wuc,
+    ];
+
+    let missing: Vec<_> = chip
+        .peripherals
+        .values()
+        .filter(|peripheral| peripheral.version.is_none())
+        .filter(|peripheral| peripheral.ty != PeripheralType::Unknown)
+        .filter(|peripheral| !UNWRITTEN_BLOCKS.contains(&peripheral.ty))
+        .map(|peripheral| peripheral.name.as_str())
+        .collect();
+
+    ensure!(
+        missing.is_empty(),
+        "{name}: no register block for {}; write one and add a perimap entry, or record the \
+         type in UNWRITTEN_BLOCKS",
+        missing.join(", ")
+    );
 
     Ok(())
 }
