@@ -108,6 +108,28 @@ fn generate_family(family: &PartFamily, sources: &FamilySources) -> anyhow::Resu
     apply_dma(family, header, svd, &mut peripherals)?;
 
     for part_number in family.part_numbers.iter() {
+        // A package sysconfig has no pinout for produces no chip at all, and the filter below
+        // cannot tell that from a package this part is simply not offered in. The G150x parts
+        // each list DGS, which their datasheet sells as MSPM0G150xSDGS28R and which the family's
+        // sysconfig has no entry for, so three parts lost a package and nothing said so.
+        let unknown: Vec<_> = part_number
+            .packages
+            .iter()
+            .filter(|wanted| !packages.iter().any(|package| &package.package == *wanted))
+            .map(String::as_str)
+            .collect();
+
+        // Reported rather than fatal: the source is incomplete, not self-contradictory, and
+        // parts.yaml should keep saying what TI sells.
+        if !unknown.is_empty() {
+            eprintln!(
+                "{}: parts.yaml lists package {}, which sysconfig has no pinout for, so no chip \
+                 is generated for it",
+                part_number.name,
+                unknown.join(", ")
+            );
+        }
+
         // Filter for package types available on the part number.
         let packages = packages
             .iter()
