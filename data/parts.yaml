@@ -319,7 +319,7 @@ families:
   - name: mspm0g1507
     memory:
     - name: FLASH
-      length: 64
+      length: 128
       address: 0x00000000
     - name: RAM
       length: 32
