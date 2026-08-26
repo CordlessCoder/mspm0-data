@@ -132,7 +132,6 @@ fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
         PeripheralType::Npu,
         PeripheralType::Rtc,
         PeripheralType::Spgss,
-        PeripheralType::Spi,
         PeripheralType::Usbfs,
         PeripheralType::Wuc,
     ];

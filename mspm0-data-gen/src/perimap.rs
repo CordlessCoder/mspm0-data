@@ -2,6 +2,9 @@ use crate::util::RegexMap;
 
 pub static PERIMAP: RegexMap<&str> = RegexMap::new(&[
     (".*:uart", "v1"),
+    // One version: hw_spi.h is a single shared IP description and every legacy instance has the
+    // whole of it, including the DMA trigger groups the C110x SVD leaves out.
+    (".*:spi", "v1"),
     (".*:gpio", "v1"),
     (".*:dma", "v1"),
     (".*:i2c", "v1"),
