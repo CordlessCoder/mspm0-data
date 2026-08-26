@@ -16,6 +16,9 @@ pub static PERIMAP: RegexMap<&str> = RegexMap::new(&[
     (".*:timb", "btimer"),
     (".*:tim", "v1"),
     (".*:adc", "v1"),
+    // Only g150x, g151x, g350x and g351x have a DAC0, so an ungated entry cannot over-match.
+    // Not the same four families as the OPA: the Gx51x parts have a DAC and no amplifier.
+    (".*:dac", "v1"),
     (".*:wwdt", "v1"),
     (".*:flashctl", "v1"),
     (".*:trng", "v1"),
