@@ -35,6 +35,7 @@ const GENERATE_PERIPHERALS: &[PeripheralType] = &[
     PeripheralType::UnicommSpi,
     PeripheralType::UnicommUart,
     PeripheralType::Vref,
+    PeripheralType::Wuc,
     PeripheralType::Wwdt,
 ];
 

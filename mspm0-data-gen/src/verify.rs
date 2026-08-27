@@ -145,7 +145,6 @@ fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
         PeripheralType::Rtc,
         PeripheralType::Spgss,
         PeripheralType::Usbfs,
-        PeripheralType::Wuc,
     ];
 
     let missing: Vec<_> = chip

@@ -11,6 +11,8 @@ pub static PERIMAP: RegexMap<&str> = RegexMap::new(&[
     (".*:beeper", "v1"),
     (".*:cpuss", "v1"),
     (".*:iomux", "v1"),
+    // Two subscriber ports and nothing else; every family has the same pair.
+    (".*:wuc", "v1"),
     (".*:mathacl", "v1"),
     (".*:opa", "v1"),
     // A TIMB instance is a basic timer: its counters live at 0x1100 where the general-purpose
