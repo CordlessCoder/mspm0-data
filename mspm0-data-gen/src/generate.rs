@@ -1009,6 +1009,29 @@ fn generate_irqs(
                 ));
             }
         }
+
+        // Members the device header does not list at all. `IRQn` names peripherals, and the
+        // wake-up controller's two event subscriber ports are not peripherals - no header names
+        // them on any device, though every datasheet's interrupt table gives them an IIDX. Taking
+        // the header as the membership list drops them, which leaves a consumer unable to tell
+        // which group member woke it after arming `WUC.FSUB`.
+        for mapping in group.iter() {
+            if entries.iter().any(|entry| entry == &mapping.name) {
+                continue;
+            }
+
+            if let Some(existing) = interrupt
+                .group
+                .insert(mapping.iidx as u32, mapping.name.clone())
+            {
+                return Err(anyhow::anyhow!(
+                    "{chip_name}, {}: IIDX {} maps to both {existing} and {}",
+                    interrupt.name,
+                    mapping.iidx,
+                    mapping.name
+                ));
+            }
+        }
     }
 
     Ok(interrupts)
