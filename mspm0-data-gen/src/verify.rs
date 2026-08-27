@@ -117,7 +117,19 @@ fn register_blocks_exist(chip: &Chip, name: &str) -> anyhow::Result<()> {
 /// Adding a type to `UNWRITTEN_BLOCKS` is a decision to ship it unaddressable. Writing the block
 /// and its `perimap` entry is the other option, and is what the list is for.
 fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
-    /// Types with no `data/registers` block yet, each an instance a consumer cannot reach.
+    /// Types with no `data/registers` block, for one of two reasons.
+    ///
+    /// Most are unwritten: the block exists in the hardware and nobody has curated it, so the
+    /// instance sits in the metadata unreachable. `GpAmp` and `Event` are not that. They have no
+    /// registers of their own at all, so no block is owed and writing one is not the fix:
+    ///
+    /// - `GpAmp` is configured through `SYSCTL.PMUOPAMP`, which every SYSCTL block already
+    ///   generates. TI ships no `GPAMP_BASE` and no register struct, only `__MSPM0_HAS_GPAMP__`,
+    ///   and driverlib's `dl_gpamp.c` writes `SYSCTL->SOCLOCK.PMUOPAMP`. sysconfig gives the
+    ///   instance no address either.
+    /// - `Event` has no header, no struct, no base address in any device header and no driverlib
+    ///   module. The event fabric is the per-peripheral `FSUB`/`FPUB` registers, which every block
+    ///   already carries; sysconfig models the fabric as a node with an address anyway.
     const UNWRITTEN_BLOCKS: &[PeripheralType] = &[
         PeripheralType::Aes,
         PeripheralType::AesAdv,
