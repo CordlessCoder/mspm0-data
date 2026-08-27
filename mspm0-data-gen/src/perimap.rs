@@ -13,6 +13,9 @@ pub static PERIMAP: RegexMap<&str> = RegexMap::new(&[
     (".*:iomux", "v1"),
     // Two subscriber ports and nothing else; every family has the same pair.
     (".*:wuc", "v1"),
+    // One version: hw_debugss.h is a single shared IP description and SLAU893 Table 22-11 lists
+    // the same fourteen registers. The C110x SVD's extra PINCM/CPU_CONNECT_0 are not in either.
+    (".*:debugss", "v1"),
     (".*:mathacl", "v1"),
     (".*:opa", "v1"),
     // A TIMB instance is a basic timer: its counters live at 0x1100 where the general-purpose

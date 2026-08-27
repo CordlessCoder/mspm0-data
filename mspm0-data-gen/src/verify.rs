@@ -133,7 +133,6 @@ fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
     const UNWRITTEN_BLOCKS: &[PeripheralType] = &[
         PeripheralType::Aes,
         PeripheralType::AesAdv,
-        PeripheralType::Debugss,
         PeripheralType::Event,
         PeripheralType::GpAmp,
         PeripheralType::I2s,
