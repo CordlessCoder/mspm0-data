@@ -13,6 +13,7 @@ pub fn verify(chip: &Chip, name: &str) -> Vec<anyhow::Error> {
         core_peripherals,
         pin_names,
         gpio_no_duplicates,
+        wakeup_pins_known,
         peripheral_types_known,
         register_blocks_exist,
         // Peripherals which don't actually exist
@@ -174,6 +175,19 @@ fn gpio_no_duplicates(chip: &Chip, name: &str) -> anyhow::Result<()> {
                 );
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Report families whose sysconfig does not describe pin wakeup logic, which is not the same as the
+/// family having no wake-capable pin.
+fn wakeup_pins_known(chip: &Chip, name: &str) -> anyhow::Result<()> {
+    if chip.wakeup_pins.is_none() {
+        bail!(
+            "{name}: sysconfig has no io_wakeup attribute for family {}, so wake-capable pins are unknown",
+            chip.family
+        );
     }
 
     Ok(())

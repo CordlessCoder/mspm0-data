@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::LazyLock};
 
-use mspm0_data_types::{Chip, Package, Peripheral, PeripheralType, PowerDomain};
+use mspm0_data_types::{Chip, IoStructure, Package, Peripheral, PeripheralType, PowerDomain};
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 use regex::Regex;
@@ -26,7 +26,26 @@ pub fn pins(chip: &Chip, package: &Package) -> TokenStream {
             .expect("Signal did not have an iomux pincm entry");
         let pincm = Literal::u8_suffixed(*pincm as u8);
 
-        Some(quote! { Pin { pin: #signal, pincm: #pincm } })
+        let wakeup = match &chip.wakeup_pins {
+            Some(wakeup_pins) => {
+                let wakeup = wakeup_pins.contains(signal);
+                quote! { Some(#wakeup) }
+            }
+            None => quote! { None },
+        };
+
+        let structure = match chip.io_structure.get(signal) {
+            Some(IoStructure::Standard) => quote! { IoStructure::Standard },
+            Some(IoStructure::StandardLowLeakage) => quote! { IoStructure::StandardLowLeakage },
+            Some(IoStructure::StandardWithWake) => quote! { IoStructure::StandardWithWake },
+            Some(IoStructure::HighDrive) => quote! { IoStructure::HighDrive },
+            Some(IoStructure::HighSpeed) => quote! { IoStructure::HighSpeed },
+            Some(IoStructure::OpenDrain) => quote! { IoStructure::OpenDrain },
+            Some(IoStructure::Usb) => quote! { IoStructure::Usb },
+            None => panic!("{signal} has a PINCM but no IO structure"),
+        };
+
+        Some(quote! { Pin { pin: #signal, pincm: #pincm, wakeup: #wakeup, structure: #structure } })
     });
 
     quote! { &[#(#pins),*] }
