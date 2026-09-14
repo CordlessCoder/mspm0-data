@@ -8,8 +8,8 @@ use std::{
 
 use anyhow::{anyhow, bail, ensure, Context};
 use mspm0_data_types::{
-    Chip, DmaChannel, Interrupt, Memory, Package, PackagePin, Peripheral, PeripheralPin,
-    PeripheralType, PowerDomain,
+    Chip, DmaChannel, Interrupt, IoStructure, Memory, Package, PackagePin, Peripheral,
+    PeripheralPin, PeripheralType, PowerDomain,
 };
 use regex::Regex;
 
@@ -63,6 +63,8 @@ fn generate_family(
 ) -> anyhow::Result<()> {
     // Data shared across all chips in a family.
     let packages = get_packages(&family.family, sysconfig)?;
+    let io_structure = generate_io_structure(&family.family, sysconfig)?;
+    let wakeup_pins = generate_wakeup_pins(sysconfig);
     let iomux = generate_pincm(&family.family, sysconfig)?;
     let peripherals = generate_peripherals2(&family.family, header, sysconfig)?;
     let interrupts = generate_irqs(&family.family, header, int_groups)?;
@@ -101,6 +103,8 @@ fn generate_family(
             memory: part_number.memory.iter().map(convert_memory).collect(),
             packages: packages.collect(),
             iomux: iomux.clone(),
+            io_structure: io_structure.clone(),
+            wakeup_pins: wakeup_pins.clone(),
             peripherals: peripherals.clone(),
             interrupts: interrupts.clone(),
             dma_channels: dma_channels.clone(),
@@ -165,6 +169,78 @@ fn get_packages(family: &str, sysconfig: &SysconfigFile) -> anyhow::Result<Vec<P
     }
 
     Ok(packages)
+}
+
+/// Read each pin's IO structure from sysconfig's `io_type`.
+///
+/// An unrecognised value is an error rather than a skipped pin: the structure decides which PINCM
+/// fields do anything, so a pin quietly missing from the map would read as a pin with no
+/// restrictions.
+fn generate_io_structure(
+    family: &str,
+    sysconfig: &SysconfigFile,
+) -> anyhow::Result<BTreeMap<String, IoStructure>> {
+    let mut structures = BTreeMap::new();
+
+    for device_pin in sysconfig.device_pins.values() {
+        // Multi-bonded pins are listed separately under each function, as in generate_pincm.
+        if device_pin.name.contains('/') {
+            continue;
+        }
+
+        // A pin with no PINCM is not usable as I/O, and sysconfig gives those no io_type either.
+        if device_pin.attributes.iomux_pincm.parse::<u32>().is_err() {
+            continue;
+        }
+
+        let io_type = device_pin.attributes.io_type.as_deref().context(format!(
+            "{family}: {} has a PINCM but no io_type",
+            device_pin.name
+        ))?;
+
+        let structure = match io_type {
+            "SD" => IoStructure::Standard,
+            "SDL" => IoStructure::StandardLowLeakage,
+            "SDW" => IoStructure::StandardWithWake,
+            "HD" => IoStructure::HighDrive,
+            "HS" => IoStructure::HighSpeed,
+            "OD" => IoStructure::OpenDrain,
+            "USB" => IoStructure::Usb,
+            other => bail!(
+                "{family}: {} has the unknown io_type {other}",
+                device_pin.name
+            ),
+        };
+
+        structures.insert(device_pin.name.to_string(), structure);
+    }
+
+    Ok(structures)
+}
+
+/// Device pins which have wakeup logic, and can therefore wake the device from SHUTDOWN.
+///
+/// `None` when the family's sysconfig omits `io_wakeup` entirely, which is a gap in the vendor data
+/// rather than a device with no wake-capable pin.
+fn generate_wakeup_pins(sysconfig: &SysconfigFile) -> Option<BTreeSet<String>> {
+    let pins = sysconfig
+        .device_pins
+        .values()
+        // Multi-bonded pins are excluded everywhere else too, see `generate_pincm`.
+        .filter(|pin| !pin.name.contains('/'))
+        .collect::<Vec<_>>();
+
+    // Missing and `false` are different answers, and only GPIO pins carry the attribute at all.
+    if pins.iter().all(|pin| pin.attributes.io_wakeup.is_none()) {
+        return None;
+    }
+
+    Some(
+        pins.iter()
+            .filter(|pin| pin.attributes.io_wakeup.unwrap_or(false))
+            .map(|pin| pin.name.clone())
+            .collect(),
+    )
 }
 
 fn generate_pincm(
