@@ -132,7 +132,6 @@ fn register_blocks_written(chip: &Chip, name: &str) -> anyhow::Result<()> {
     ///   already carries; sysconfig models the fabric as a node with an address anyway.
     const UNWRITTEN_BLOCKS: &[PeripheralType] = &[
         PeripheralType::Aes,
-        PeripheralType::AesAdv,
         PeripheralType::Event,
         PeripheralType::GpAmp,
         PeripheralType::I2s,
