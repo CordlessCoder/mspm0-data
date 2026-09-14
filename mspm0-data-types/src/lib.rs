@@ -53,6 +53,9 @@ pub struct Chip {
     /// Which IO structure each device pin is built from, keyed the same way as `iomux`.
     ///
     /// Every pin with a PINCM has one.
+    ///
+    /// `mspm0-metapac-gen` flattens this onto each `Pin` as `Pin::structure`, so a consumer of the
+    /// generated crate reads it there rather than here.
     pub io_structure: BTreeMap<String, IoStructure>,
 
     /// Device pins which have wakeup logic and can therefore wake the device from SHUTDOWN.
@@ -61,7 +64,16 @@ pub struct Chip {
     /// pin and is therefore not described here.
     ///
     /// `None` when sysconfig does not describe wakeup logic for this family, which is not the same as
-    /// the family having no wake-capable pin.
+    /// the family having no wake-capable pin. **That is the common case**: the attribute is absent
+    /// on 11 of the 18 families, 30 of the 43 part numbers. The seven which carry it are c110x,
+    /// c1105_c1106, g151x, g351x, g518x, l112x and l211x.
+    ///
+    /// Do not fall back to `io_structure` where this is `None`. SLAU846 Table 8-1 maps structure to
+    /// wake capability and is wrong on mspm0c110x and msps003fx, whose open-drain pins have no
+    /// wakeup logic — and msps003fx is one of the families with no attribute to contradict it.
+    ///
+    /// `mspm0-metapac-gen` flattens this onto each `Pin` as `Pin::wakeup`, so a consumer of the
+    /// generated crate reads it there rather than here.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wakeup_pins: Option<BTreeSet<String>>,
 

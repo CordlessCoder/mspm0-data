@@ -1048,7 +1048,14 @@ pub struct Pin {
     /// any GPIO pin, but only down to STANDBY.
     ///
     /// `None` when the vendor data does not describe wakeup logic for this chip, which is not the
-    /// same as `Some(false)`.
+    /// same as `Some(false)`. **That is the common case**: sysconfig carries the attribute on only
+    /// 7 of the 18 families, so `None` on every pin is the answer for 30 of the 43 part numbers.
+    /// The seven are c110x, c1105_c1106, g151x, g351x, g518x, l112x and l211x.
+    ///
+    /// Do not fall back to [`Pin::structure`] where this is `None`. SLAU846 Table 8-1 maps structure
+    /// to wake capability and is wrong on mspm0c110x and msps003fx, whose open-drain pins have no
+    /// wakeup logic. On mspm0c110x this field says so — every pin is `Some(false)`, the two
+    /// open-drain pins included. On msps003fx it is `None`, so nothing contradicts the table there.
     pub wakeup: Option<bool>,
 
     /// Which IO structure the pin is built from, and so which of its PINCM fields do anything.
