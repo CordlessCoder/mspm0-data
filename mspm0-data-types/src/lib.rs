@@ -251,6 +251,34 @@ pub struct Peripheral {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sys_fentries: Option<usize>,
+
+    /// The interrupts raised by this peripheral.
+    ///
+    /// Usually one, and empty for a peripheral which raises none. A peripheral can have several: the
+    /// MSPM33 parts route a peripheral's interrupt outputs to more than one NVIC line, so the HSADC
+    /// has five. Note this is the opposite multiplicity to an `INT_GROUP`, where several peripherals
+    /// share one line and are told apart by [`PeripheralInterrupt::group_iidx`]; the two can coexist.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub interrupts: Vec<PeripheralInterrupt>,
+}
+
+/// The interrupt raised by a peripheral.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeripheralInterrupt {
+    /// Name of the NVIC interrupt.
+    ///
+    /// For a peripheral inside an `INT_GROUP` this is the name of the group (e.g. `GROUP1`), not
+    /// the name of the peripheral.
+    pub name: String,
+
+    /// Number of the NVIC interrupt.
+    pub num: i32,
+
+    /// The peripheral's `IIDX` value within its `INT_GROUP`.
+    ///
+    /// `None` if the peripheral has an NVIC interrupt of its own rather than sharing a group.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_iidx: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

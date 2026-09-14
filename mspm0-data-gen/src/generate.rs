@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, ensure, Context};
 use mspm0_data_types::{
-    Chip, DmaChannel, Interrupt, Memory, Package, PackagePin, Peripheral, PeripheralPin,
+    Chip, DmaChannel, Interrupt, Memory, Package, PackagePin, Peripheral, PeripheralInterrupt, PeripheralPin,
     PeripheralType, PowerDomain,
 };
 use regex::Regex;
@@ -64,10 +64,13 @@ fn generate_family(
     // Data shared across all chips in a family.
     let packages = get_packages(&family.family, sysconfig)?;
     let iomux = generate_pincm(&family.family, sysconfig)?;
-    let peripherals = generate_peripherals2(&family.family, header, sysconfig)?;
+    let mut peripherals = generate_peripherals2(&family.family, header, sysconfig)?;
     let interrupts = generate_irqs(&family.family, header, int_groups)?;
     let dma_channels = generate_dma_channels(&family.family, sysconfig)?;
     let adc_memctl = generate_adc_memctl_dim(&family.family, sysconfig)?;
+
+    // Facts which are easier to attach once every peripheral is known.
+    apply_peripheral_interrupts(&mut peripherals, &interrupts);
 
     for part_number in family.part_numbers.iter() {
         // Filter for package types available on the part number.
@@ -120,6 +123,42 @@ fn generate_family(
     }
 
     Ok(())
+}
+
+/// Attach each peripheral to the interrupts it raises.
+///
+/// A peripheral either owns NVIC interrupts of its own or sits inside an `INT_GROUP` and shares the
+/// group's interrupt, distinguished by an `IIDX` value. Both are matched by name, which is the only
+/// thing tying them together in the vendor data.
+///
+/// Every match is collected rather than the first. No MSPM0 peripheral has more than one, but the
+/// MSPM33 parts route a peripheral's interrupt outputs to several NVIC lines.
+fn apply_peripheral_interrupts(
+    peripherals: &mut BTreeMap<String, Peripheral>,
+    interrupts: &BTreeMap<i32, Interrupt>,
+) {
+    for (name, peripheral) in peripherals.iter_mut() {
+        let own = interrupts
+            .values()
+            .filter(|interrupt| &interrupt.name == name)
+            .map(|interrupt| PeripheralInterrupt {
+                name: interrupt.name.clone(),
+                num: interrupt.num,
+                group_iidx: None,
+            });
+
+        let shared = interrupts.values().filter_map(|interrupt| {
+            let (&iidx, _) = interrupt.group.iter().find(|(_, member)| *member == name)?;
+
+            Some(PeripheralInterrupt {
+                name: interrupt.name.clone(),
+                num: interrupt.num,
+                group_iidx: Some(iidx),
+            })
+        });
+
+        peripheral.interrupts = own.chain(shared).collect();
+    }
 }
 
 fn get_packages(family: &str, sysconfig: &SysconfigFile) -> anyhow::Result<Vec<Package>> {
@@ -279,6 +318,7 @@ fn generate_peripherals2(
                 power_domain,
                 pins: vec![],
                 sys_fentries,
+                interrupts: Vec::new(),
             };
 
             // Lookup the pins
@@ -527,6 +567,7 @@ fn generate_missing(
             power_domain: PowerDomain::Pd1,
             pins: vec![],
             sys_fentries: None,
+            interrupts: Vec::new(),
         },
     );
 
@@ -550,6 +591,7 @@ fn generate_missing(
             power_domain: PowerDomain::Pd1,
             pins: vec![],
             sys_fentries: None,
+            interrupts: Vec::new(),
         },
     );
 
@@ -581,6 +623,7 @@ fn generate_missing(
                     power_domain: PowerDomain::Pd0,
                     pins: vec![],
                     sys_fentries: None,
+                    interrupts: Vec::new(),
                 });
 
             let pin = device_pin
