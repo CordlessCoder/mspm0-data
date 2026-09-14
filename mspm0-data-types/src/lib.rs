@@ -31,7 +31,23 @@ pub struct Chip {
     /// Packages which this chip is available in.
     pub packages: Vec<Package>,
 
-    /// Mapping from device pin to IOMUX register index.
+    /// Mapping from device pin name to its `PINCM` number, as TI numbers them: **one-based**, so
+    /// `PA0` is `1` on the parts where the two line up at all.
+    ///
+    /// The number is neither a byte offset nor an array index, and all three forms are in use, so
+    /// state which one you mean:
+    ///
+    /// - register address: `IOMUX_BASE + pincm * 4`, because the array starts at `IOMUX_BASE + 4`
+    /// - `iomux_v1` accessor: `IOMUX.pincm(pincm - 1)`, which is zero-based
+    /// - the value here: TI's own `PINCM<n>` name, matching the datasheet pin tables
+    ///
+    /// Adding the array's `+ 4` to this value double-counts and lands one register high on every
+    /// pin — a real mistake, made by a consumer reading this field for the first time.
+    ///
+    /// **Do not compute this from the pin number.** It is `pin + 1` on only 14 of the 43 part
+    /// numbers, all of them single-port devices; on the other 29 the difference ranges from -27 to
+    /// +28 and is not affine. `PB0` continues the same numbering space rather than restarting, so
+    /// a port base plus pin offset is wrong too. This map is the only correct answer.
     pub iomux: BTreeMap<String, u32>,
 
     /// Which IO structure each device pin is built from, keyed the same way as `iomux`.
